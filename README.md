@@ -8,6 +8,7 @@ It is built for portraits and tuned to get the **subject** correctly exposed wit
 
 > [!NOTE]
 > **Disclaimer: this plugin was "vibe coded."** It was built collaboratively with an AI assistant, iterating by feel and testing as we went, rather than through a formal engineering process. It has been exercised across its features and works — but it has not been through rigorous QA, and it talks to paid third‑party APIs and writes to your Lightroom catalog. Use it at your own risk, keep backups of anything you care about, and treat the AI's edits as a starting point. PRs and bug reports welcome.
+📖 **Documentation:** https://farbener.github.io/AIEdit/AIEdit-Documentation.html
 
 ---
 
