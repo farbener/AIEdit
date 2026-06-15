@@ -1,0 +1,20 @@
+# Plugin runtime debug log (written to the user's Documents, never commit)
+AIEdit_debug.log
+
+# Build artifacts / packaged plugin (attach to GitHub Releases instead)
+*.lrplugin.zip
+*.zip
+
+# Lightroom temp thumbnails the plugin writes
+aiedit_thumb_*.jpg
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~

@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!--
+  ============================================================================
+  AI Edit — Plugin Documentation
+  Single self-contained file: HTML + CSS + JS, no build step.
+
+  HOW THIS FILE IS ORGANISED
+    <head>   design tokens (:root) + all CSS, grouped by section with banners
+    <body>   skip link · mobile top bar · sidebar nav · <main> content
+    <script> one IIFE at the very bottom: mobile nav, active-section highlight,
+             copy buttons. No global variables are created.
+
+  HOW TO CUSTOMISE
+    • Colours / spacing      → edit the :root tokens (each is commented).
+    • The luminance band      → see ".lumscale .band" (the % encode 122–148/255).
+    • Content                 → each <section id="…"> matches a sidebar link.
+    • Module line counts etc. → the Reference section; update when source changes.
+
+  ACCESSIBILITY FLOOR (kept intentionally)
+    skip link · visible :focus-visible rings · prefers-reduced-motion honoured ·
+    aria-expanded on the menu button · labelled nav landmark.
+  ============================================================================
+-->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Edit — Plugin Documentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     DESIGN TOKENS — single source of truth, grouped by role.
+     Change a value here and it propagates everywhere.
+     ============================================================ */
+  :root{
+    /* Text on the light "paper" reading surface */
+    --ink:#16181d;          /* primary body text                   */
+    --ink-soft:#33363f;     /* lede / section intros               */
+    --muted:#6c6f7a;        /* captions, table headers, sub-labels */
+
+    /* The dark "develop panel" chrome (sidebar + mobile top bar) */
+    --chrome:#13151c;       /* chrome background                   */
+    --chrome-2:#1b1e28;     /* hover / active rows in the chrome   */
+    --chrome-line:rgba(255,255,255,.09); /* hairlines on dark      */
+    --chrome-text:#d7d9e0;  /* nav link text                       */
+    --chrome-muted:#83879a; /* nav group labels                    */
+
+    /* The light reading surface */
+    --paper:#f6f4ef;        /* page background (warm paper)         */
+    --card:#ffffff;         /* cards, tables, callouts             */
+    --line:#e4dfd4;         /* borders on paper                    */
+    --line-soft:#eeeae1;    /* inner row dividers                  */
+
+    /* Accents — amber = "exposure / light", blue = "subject target" */
+    --amber:#cf8a25; --amber-soft:#f2cd8c; --amber-wash:#faf2e2;
+    --blue:#4d7f9e;  --blue-wash:#eaf1f5;
+
+    /* Status colours for callouts */
+    --ok:#3f7d54; --warn:#b5662a; --err:#a8412f;
+
+    /* Geometry */
+    --radius:10px;          /* shared corner radius                */
+    --maxw:880px;           /* reading-column max width            */
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,sans-serif; font-size:16px; line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--ink); text-decoration:none}
+  code,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+  /* Accessibility: visible keyboard focus on every interactive element.
+     :focus-visible keeps it off for plain mouse clicks. */
+  a:focus-visible, button:focus-visible, summary:focus-visible{
+    outline:2px solid var(--amber); outline-offset:2px; border-radius:4px;
+  }
+
+  /* Accessibility: honour "reduce motion" by disabling ALL animation and
+     transitions, not only smooth scrolling. */
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    *,*::before,*::after{transition:none !important; animation:none !important}
+  }
+
+  /* Skip link: lets keyboard users jump past the nav to the content.
+     Hidden off-screen until focused. */
+  .skip-link{
+    position:absolute; left:12px; top:-52px; z-index:60;
+    background:var(--chrome); color:#fff; padding:9px 16px; border-radius:8px; font-size:14px;
+    transition:top .15s;
+  }
+  .skip-link:focus{top:12px}
+
+  /* Small utility classes (used instead of per-element inline styles) */
+  .brand-accent{color:var(--amber-soft)}              /* the "(Claude)" wordmark accent */
+  .ilink{border-bottom:1px solid var(--amber-soft); color:var(--ink)} /* inline prose link */
+  .ilink:hover{color:var(--warn)}
+
+  /* ---------- layout ---------- */
+  .layout{display:grid; grid-template-columns:288px 1fr; min-height:100vh}
+  .sidebar{
+    background:var(--chrome); color:var(--chrome-text);
+    border-right:1px solid var(--chrome-line);
+    position:sticky; top:0; height:100vh; overflow-y:auto; padding:30px 22px 50px;
+  }
+  .main{min-width:0}
+  .content{max-width:var(--maxw); margin:0 auto; padding:72px 40px 140px}
+
+  /* ---------- sidebar brand ---------- */
+  .brand{display:flex; align-items:center; gap:12px; margin-bottom:6px}
+  .brand-mark{
+    width:38px; height:38px; border-radius:8px; flex:none;
+    background:linear-gradient(150deg,#23262f,#15171d);
+    border:1px solid var(--chrome-line); position:relative; overflow:hidden;
+  }
+  .brand-mark::after{ /* a tiny luminance ramp inside the mark */
+    content:""; position:absolute; left:6px; right:6px; bottom:7px; height:9px; border-radius:2px;
+    background:linear-gradient(90deg,#0b0c10,#3a3d47 45%,#cf8a25 62%,#f3ecdf);
+  }
+  .brand-name{font-family:"Fraunces",serif; font-weight:600; font-size:18px; color:#fff; line-height:1.15}
+  .brand-sub{font-size:11.5px; color:var(--chrome-muted); letter-spacing:.04em; text-transform:uppercase}
+  .ver{
+    display:inline-block; margin-top:14px; font-family:"IBM Plex Mono",monospace; font-size:11px;
+    color:var(--amber-soft); border:1px solid rgba(242,205,140,.25); border-radius:999px; padding:2px 10px;
+  }
+  .nav{margin-top:26px}
+  .nav-group{margin-bottom:20px}
+  .nav-group h4{
+    font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--chrome-muted);
+    margin:0 0 8px; font-weight:600;
+  }
+  .nav a{
+    display:block; color:var(--chrome-text); font-size:14px; padding:6px 12px; border-radius:7px;
+    border-left:2px solid transparent; opacity:.82; transition:all .15s;
+  }
+  .nav a:hover{opacity:1; background:var(--chrome-2)}
+  .nav a.active{opacity:1; background:var(--chrome-2); border-left-color:var(--amber); color:#fff}
+
+  /* ---------- hero ---------- */
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--warn); margin-bottom:18px;
+  }
+  h1{
+    font-family:"Fraunces",serif; font-weight:600; font-size:clamp(34px,5vw,52px); line-height:1.04;
+    letter-spacing:-.01em; margin:0 0 18px;
+  }
+  .lede{font-size:19px; color:var(--ink-soft); max-width:60ch; margin:0 0 30px}
+
+  /* signature: luminance scale (0–255). The band marks the subject target. */
+  .lumscale{margin:34px 0 10px}
+  .lumscale .bar{
+    position:relative; height:46px; border-radius:8px; overflow:hidden;
+    background:linear-gradient(90deg,#070809 0%,#2b2e36 30%,#7b7e88 55%,#cfd2d8 78%,#fbfbfc 100%);
+    border:1px solid var(--line);
+  }
+  /* Band geometry encodes the subject target band 122–148 on a 0–255 scale:
+       left  = 122/255 = 47.8% ; right = 148/255 = 58.0% ; width = 10.2%.
+     If you change the target band in the plugin prompt, update these two numbers. */
+  .lumscale .band{
+    position:absolute; top:0; bottom:0; left:47.8%; width:10.2%;
+    background:rgba(77,127,158,.30); border-left:2px solid var(--blue); border-right:2px solid var(--blue);
+  }
+  .lumscale .band span{
+    position:absolute; top:-22px; left:50%; transform:translateX(-50%); white-space:nowrap;
+    font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--blue); font-weight:500;
+  }
+  .lumscale .ends{display:flex; justify-content:space-between; margin-top:9px;
+    font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--muted)}
+  .lumscale .cap{font-size:13px; color:var(--muted); margin-top:4px}
+
+  /* ---------- sections ---------- */
+  section{padding-top:54px; margin-top:18px; scroll-margin-top:24px}
+  section > .kicker{
+    font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--amber); margin-bottom:10px;
+  }
+  h2{font-family:"Fraunces",serif; font-weight:600; font-size:30px; line-height:1.12; letter-spacing:-.01em; margin:0 0 8px}
+  h3{font-family:"IBM Plex Sans",sans-serif; font-weight:600; font-size:19px; margin:34px 0 8px}
+  h4{font-weight:600; font-size:15.5px; margin:22px 0 6px}
+  p{margin:12px 0}
+  .section-intro{color:var(--ink-soft); font-size:17px; max-width:62ch}
+  hr.div{border:0; border-top:1px solid var(--line); margin:46px 0 0}
+
+  ul,ol{padding-left:22px; margin:12px 0}
+  li{margin:6px 0}
+
+  /* steps */
+  .steps{counter-reset:step; list-style:none; padding:0; margin:24px 0}
+  .steps > li{
+    counter-increment:step; position:relative; padding:0 0 22px 56px; margin:0;
+    border-left:1px solid var(--line); margin-left:16px;
+  }
+  .steps > li:last-child{border-left-color:transparent}
+  .steps > li::before{
+    content:counter(step); position:absolute; left:-16px; top:-2px; width:32px; height:32px;
+    background:var(--chrome); color:#fff; border-radius:8px; display:grid; place-items:center;
+    font-family:"IBM Plex Mono",monospace; font-size:14px; font-weight:600;
+  }
+  .steps h4{margin:2px 0 4px}
+
+  /* code */
+  pre{
+    background:#13151c; color:#e7e9ef; border-radius:var(--radius); padding:16px 18px; overflow:auto;
+    font-size:13.5px; line-height:1.6; margin:14px 0; border:1px solid #23262f; position:relative;
+  }
+  pre code{color:inherit; background:none; padding:0}
+  :not(pre) > code{
+    background:#efece4; border:1px solid var(--line); border-radius:5px; padding:1px 6px; font-size:13.5px;
+    color:#3a2f1c;
+  }
+  .tok-c{color:#7f8597} /* comment */
+  .tok-s{color:#c9b072} /* string  */
+  .tok-k{color:#d98c52} /* keyword */
+  .copy{
+    position:absolute; top:8px; right:8px; font-family:"IBM Plex Mono",monospace; font-size:11px;
+    background:#23262f; color:#aeb2c0; border:1px solid #2f3340; border-radius:6px; padding:3px 8px; cursor:pointer;
+  }
+  .copy:hover{color:#fff; border-color:var(--amber)}
+
+  /* callouts */
+  .note{
+    border-radius:var(--radius); padding:14px 16px; margin:18px 0; font-size:14.5px;
+    border:1px solid var(--line); background:var(--card);
+  }
+  .note .lbl{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    font-weight:600; display:block; margin-bottom:4px}
+  .note.tip{background:var(--blue-wash); border-color:#cfe0e9} .note.tip .lbl{color:var(--blue)}
+  .note.warn{background:var(--amber-wash); border-color:#ecd9b3} .note.warn .lbl{color:var(--warn)}
+  .note.key{background:#f3f7f3; border-color:#cfe2d3} .note.key .lbl{color:var(--ok)}
+
+  /* tables */
+  .tbl-wrap{overflow-x:auto; margin:18px 0; border:1px solid var(--line); border-radius:var(--radius)}
+  table{border-collapse:collapse; width:100%; font-size:14px; background:var(--card)}
+  th,td{text-align:left; padding:10px 14px; border-bottom:1px solid var(--line-soft); vertical-align:top}
+  th{font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:600; background:#fbfaf7}
+  tr:last-child td{border-bottom:0}
+  td code{font-size:12.5px}
+  .t-mono td:first-child{font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:#3a2f1c; white-space:nowrap}
+
+  /* feature grid */
+  .features{display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin:26px 0}
+  .feature{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px}
+  .feature h4{margin:0 0 4px; font-size:15px}
+  .feature p{margin:0; font-size:14px; color:var(--muted)}
+  .feature .ic{font-family:"IBM Plex Mono",monospace; color:var(--amber); font-size:12px; font-weight:600}
+
+  /* module cards (reference) */
+  .mod{border:1px solid var(--line); border-radius:var(--radius); background:var(--card); margin:14px 0; overflow:hidden}
+  .mod-head{display:flex; align-items:baseline; gap:12px; padding:13px 16px; background:#fbfaf7; border-bottom:1px solid var(--line-soft)}
+  .mod-head .fn{font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:14px}
+  .mod-head .ln{margin-left:auto; font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--muted)}
+  .mod-body{padding:14px 16px}
+  .mod-body p{margin:0 0 10px}
+  .mod-body p:last-child{margin-bottom:0}
+
+  /* troubleshooting (native <details>) */
+  details.ts{border:1px solid var(--line); border-radius:var(--radius); background:var(--card); margin:12px 0; overflow:hidden}
+  details.ts > summary{
+    list-style:none; cursor:pointer; padding:14px 18px; font-weight:600; font-size:15.5px;
+    display:flex; align-items:center; gap:12px;
+  }
+  details.ts > summary::-webkit-details-marker{display:none}
+  details.ts > summary::before{
+    content:"+"; font-family:"IBM Plex Mono",monospace; color:var(--amber); font-weight:700; font-size:18px; flex:none;
+  }
+  details.ts[open] > summary::before{content:"\2212"}
+  details.ts[open] > summary{border-bottom:1px solid var(--line-soft)}
+  .ts-body{padding:4px 18px 18px}
+  .ts-body .sym{font-size:13.5px; color:var(--muted); margin:8px 0 12px; font-style:italic}
+
+  /* diagram */
+  .diagram{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:22px; margin:22px 0; overflow-x:auto}
+  .diagram svg{display:block; margin:0 auto; min-width:560px; max-width:100%}
+
+  footer{border-top:1px solid var(--line); margin-top:80px; padding-top:26px; color:var(--muted); font-size:13.5px}
+
+  /* ---------- mobile ---------- */
+  .topbar{display:none}
+  @media (max-width:880px){
+    .layout{grid-template-columns:1fr}
+    .sidebar{position:fixed; z-index:40; width:300px; left:-320px; transition:left .22s; box-shadow:0 0 60px rgba(0,0,0,.4)}
+    .sidebar.open{left:0}
+    .topbar{
+      display:flex; align-items:center; gap:14px; position:sticky; top:0; z-index:30;
+      background:var(--chrome); color:#fff; padding:12px 18px; border-bottom:1px solid var(--chrome-line);
+    }
+    .topbar .brand-name{font-size:15px}
+    .menu-btn{background:var(--chrome-2); border:1px solid var(--chrome-line); color:#fff; border-radius:7px;
+      width:38px; height:38px; font-size:18px; cursor:pointer; flex:none}
+    .content{padding:34px 22px 100px}
+    .features{grid-template-columns:1fr}
+    .scrim{display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:35}
+    .scrim.show{display:block}
+  }
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="topbar">
+  <button class="menu-btn" id="menuBtn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">≡</button>
+  <span class="brand-name">AI Edit</span>
+</div>
+<div class="scrim" id="scrim"></div>
+
+<div class="layout">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div>
+        <div class="brand-name">AI Edit</div>
+        <div class="brand-sub">Lightroom Classic plugin</div>
+      </div>
+    </div>
+    <span class="ver">v1.3.1 · io.github.farbener.aiedit</span>
+
+    <nav class="nav" id="nav" aria-label="Documentation sections">
+      <div class="nav-group">
+        <h4>Start here</h4>
+        <a href="#overview">Overview</a>
+        <a href="#quickstart">Quickstart</a>
+        <a href="#tutorial">Tutorial: first edit</a>
+      </div>
+      <div class="nav-group">
+        <h4>Using it</h4>
+        <a href="#features">Features</a>
+        <a href="#howto">How-to guides</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+      </div>
+      <div class="nav-group">
+        <h4>Understanding it</h4>
+        <a href="#how-it-works">How it works</a>
+        <a href="#pipeline">The edit pipeline</a>
+        <a href="#concepts">Key concepts</a>
+      </div>
+      <div class="nav-group">
+        <h4>Reference</h4>
+        <a href="#ref-modules">Source modules</a>
+        <a href="#ref-keys">Develop-key map</a>
+        <a href="#ref-schema">Adjustment schema</a>
+        <a href="#ref-settings">Settings &amp; files</a>
+        <a href="#changelog">Changelog &amp; limits</a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main" id="main">
+    <div class="content">
+
+      <!-- HERO -->
+      <div class="eyebrow">Lightroom Classic · AI develop assistant</div>
+      <h1>AI&nbsp;Edit</h1>
+      <p class="lede">A Lightroom Classic plugin that sends a photo to an AI model (Claude or ChatGPT), gets back a full set of develop adjustments, and applies them — with a visual preview, presets, and one-click revert. Built for portraits, tuned for getting the subject into the light without wrecking the background.</p>
+
+      <div class="lumscale" aria-hidden="true">
+        <div class="bar"><div class="band"><span>subject target · 122–148</span></div></div>
+        <div class="ends"><span>0 · black</span><span>luminance (0–255)</span><span>255 · white</span></div>
+        <div class="cap">The core idea: measure the <em>subject's</em> brightness, not the whole frame, and aim it into a flattering band — while a dark backdrop stays dark.</div>
+      </div>
+
+      <!-- OVERVIEW -->
+      <section id="overview">
+        <div class="kicker">Overview</div>
+        <h2>What it is</h2>
+        <p class="section-intro">AI Edit adds two commands to Lightroom Classic's <strong>Library</strong> menu. Point it at one or more photos; it renders a preview, measures a histogram, asks the model for develop settings tailored to that image (and any style note you give), and applies them. You can preview the result and keep or revert before committing.</p>
+
+        <p>It runs entirely inside Lightroom as a Lua plugin and talks to your chosen provider (Anthropic or OpenAI) directly from your machine using your own API key. No external services, no upload step, no separate app.</p>
+
+        <div class="note key">
+          <span class="lbl">At a glance</span>
+          Works in <strong>Lightroom Classic only</strong> (the cloud "Lightroom" has no plugin SDK). Needs an API key for your chosen provider — <strong>Anthropic (Claude)</strong> or <strong>OpenAI (ChatGPT)</strong>. Uses <code>claude-sonnet-4-6</code> or <code>gpt-4o</code> respectively. Edits are non-destructive — they're Lightroom develop settings you can reset at any time.
+        </div>
+
+        <h3>Who this is for</h3>
+        <p>Photographers who shoot batches of similar frames (headshots, events, product) and want a fast, consistent first-pass edit they can fine-tune — and anyone curious how to drive the Lightroom SDK from an LLM. The troubleshooting and reference sections assume no Lua knowledge; the source reference is there if you want to extend it.</p>
+      </section>
+
+      <hr class="div">
+
+      <!-- QUICKSTART -->
+      <section id="quickstart">
+        <div class="kicker">Quickstart</div>
+        <h2>Install in five steps</h2>
+        <p class="section-intro">From zero to a working plugin. This takes about three minutes.</p>
+
+        <ol class="steps">
+          <li>
+            <h4>Unzip the plugin</h4>
+            <p>Unzip <code>AIEdit.lrplugin.zip</code>. You'll get a folder named <code>AIEdit.lrdevplugin</code>. Put it somewhere permanent — not your Downloads folder — for example <code>Documents/Lightroom/Plugins/</code>.</p>
+          </li>
+          <li>
+            <h4>Open the Plug-in Manager</h4>
+            <p>In Lightroom Classic: <strong>File → Plug-in Manager…</strong></p>
+          </li>
+          <li>
+            <h4>Add the plugin</h4>
+            <p>Click <strong>Add</strong>, select the <code>AIEdit.lrdevplugin</code> folder, and confirm. It should appear in the list with a green status light. Click <strong>Done</strong>.</p>
+          </li>
+          <li>
+            <h4>Choose a provider &amp; add your API key</h4>
+            <p>Select a photo in the <strong>Library</strong> grid, then run <strong>Library → Plug-in Extras → AI Edit Selected Photo…</strong> Near the bottom, pick your <em>AI provider</em> — Anthropic (Claude) or OpenAI (ChatGPT) — then paste the matching API key into the key field. It's saved automatically, separately per provider, so you can keep both.</p>
+            <div class="note tip"><span class="lbl">Where to get a key</span>Anthropic: <code>console.anthropic.com</code> → API Keys. OpenAI: <code>platform.openai.com</code> → API keys. Your key stays on your machine (in Lightroom's plugin preferences) and is sent only to the provider you selected.</div>
+          </li>
+          <li>
+            <h4>Run your first edit</h4>
+            <p>With a photo selected, keep <em>Preview</em> on, leave strength at 100%, and click <strong>Analyse &amp; Apply</strong>. Review the rendered preview, then <strong>Keep</strong> or <strong>Revert</strong>. That's it.</p>
+          </li>
+        </ol>
+
+        <div class="note warn">
+          <span class="lbl">Lightroom Classic only</span>
+          If you don't see <strong>Plug-in Manager</strong> under File, you're probably in the cloud "Lightroom" app, which has no SDK. This plugin requires <strong>Lightroom Classic</strong> on Windows or macOS.
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- TUTORIAL -->
+      <section id="tutorial">
+        <div class="kicker">Tutorial</div>
+        <h2>Edit your first portrait</h2>
+        <p class="section-intro">Let's walk through a real edit together — a portrait shot against a dark backdrop, the case the plugin is tuned for. By the end you'll understand every control in the dialog.</p>
+
+        <h3>1 · Select and open</h3>
+        <p>In the Library grid, click a portrait. Run <strong>Library → Plug-in Extras → AI Edit Selected Photo…</strong> The dialog opens with the photo's name shown at the top.</p>
+
+        <h3>2 · Choose your controls</h3>
+        <p>Here's what each control does and how we'll set it for this first run:</p>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Control</th><th>What it does</th><th>Set it to</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Preset</strong></td><td>Fills the style + strength fields from a saved recipe.</td><td>— none —</td></tr>
+            <tr><td><strong>Style instruction</strong></td><td>Optional free text, e.g. "soft natural skin, neutral colour".</td><td>Leave blank</td></tr>
+            <tr><td><strong>Adjustment strength</strong></td><td>Tells the model how hard to push. 100% = normal.</td><td>100%</td></tr>
+            <tr><td><strong>Preview before applying</strong></td><td>Shows the rendered result with Keep / Revert (single photo only).</td><td>On</td></tr>
+            <tr><td><strong>Log exposure diagnostic</strong></td><td>Writes subject-brightness analysis to the log. No effect on the edit.</td><td>Off</td></tr>
+            <tr><td><strong>AI provider</strong></td><td>Which model answers — Anthropic (Claude) or OpenAI (ChatGPT).</td><td>Your choice</td></tr>
+            <tr><td><strong>API key</strong></td><td>The key for the selected provider. Stored separately per provider.</td><td>Your key</td></tr>
+          </tbody>
+        </table></div>
+
+        <div class="note tip"><span class="lbl">Why 100%?</span>The model already targets a well-lit face using the histogram. Strength is passed to it as guidance — a higher number asks it to push its corrections harder. Leave it at 100% and only raise it if a specific image consistently comes out too flat. Asking for very high strength (e.g. 180%) is what caused early over-bright, green-tinted results.</div>
+
+        <h3>3 · Analyse &amp; apply</h3>
+        <p>Click <strong>Analyse &amp; Apply</strong>. Behind the scenes the plugin renders a preview, measures the histogram, and asks the model for settings. After a few seconds the edit is applied and the preview window appears.</p>
+
+        <h3>4 · Read the preview</h3>
+        <p>The preview shows the <em>rendered, edited</em> photo on the left, and on the right: the exact adjustments the model chose, plus its reasoning — for example why it lifted exposure, how much it pulled highlights to protect the white shirt, and how it kept the backdrop dark. This is your chance to judge before committing.</p>
+
+        <h3>5 · Keep or revert</h3>
+        <p>Happy with it? Click <strong>Keep</strong>. Not happy? Click <strong>Revert</strong> and the photo returns exactly to where it started — losslessly. Try both; revert is safe.</p>
+
+        <div class="note key"><span class="lbl">You just did a full round-trip</span>You analysed, previewed, and reverted — non-destructively. Now try it with a <em>style instruction</em> like "warm, slightly filmic" and compare. When you find a look you like, save it as a preset (next section) so a whole shoot can get the same treatment.</div>
+      </section>
+
+      <hr class="div">
+
+      <!-- FEATURES -->
+      <section id="features">
+        <div class="kicker">Features</div>
+        <h2>What's in the box</h2>
+        <div class="features">
+          <div class="feature"><div class="ic">▥ PREVIEW</div><h4>Visual preview</h4><p>See the rendered edit with the model's adjustment list and reasoning, then Keep or Revert. Single-photo mode.</p></div>
+          <div class="feature"><div class="ic">★ PRESETS</div><h4>Named presets</h4><p>Save a style + strength recipe and reapply it from a dropdown. Persists across sessions.</p></div>
+          <div class="feature"><div class="ic">⟳ MEMORY</div><h4>Last-used recall</h4><p>The dialog reopens with your previous style, strength and preview choice.</p></div>
+          <div class="feature"><div class="ic">▦ BATCH</div><h4>Batch editing</h4><p>Select many photos and apply in one run, with a progress bar and a summary.</p></div>
+          <div class="feature"><div class="ic">◐ HISTOGRAM</div><h4>Subject metering</h4><p>A pure-Lua decoder classifies skin-tone pixels to meter the actual face, regardless of where it sits in the frame.</p></div>
+          <div class="feature"><div class="ic">↺ REVERT</div><h4>Revert</h4><p>One menu command restores any photo to its pre-edit original — all edits are ordinary develop settings.</p></div>
+          <div class="feature"><div class="ic">◎ CONTEXT</div><h4>Per-photo context</h4><p>Camera, lens, ISO, file type and more are sent to the model so RAW vs JPEG headroom is handled.</p></div>
+          <div class="feature"><div class="ic">▤ LOG</div><h4>Diagnostic log</h4><p>Every step is logged to a file for troubleshooting — the single most useful tool when something looks off.</p></div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- HOW-TO -->
+      <section id="howto">
+        <div class="kicker">How-to guides</div>
+        <h2>Common tasks</h2>
+        <p class="section-intro">Short, goal-oriented recipes for specific jobs. For things going <em>wrong</em>, see <a class="ilink" href="#troubleshooting">Troubleshooting</a> below.</p>
+
+        <h3>Save a preset for a whole shoot</h3>
+        <p>Open the dialog, set your style instruction and strength, then click <strong>Save current as preset…</strong> Give it a name (e.g. <em>"Headshots — neutral"</em>). It now appears in the Preset dropdown. For the rest of the shoot, just pick it from the dropdown and the fields fill in.</p>
+        <div class="note tip"><span class="lbl">Recommended</span>Save portrait presets at <strong>100% strength</strong>. If you have an old high-strength preset from testing, re-save it at 100% to avoid over-bright results.</div>
+
+        <h3>Edit a batch of similar frames</h3>
+        <p>Select all the frames in the grid first, then run <strong>AI Edit Selected Photo…</strong> The action button reads <em>"Apply to N photos."</em> Preview is single-photo only, so for batches it applies directly and shows a summary at the end. Each photo is analysed individually, so exposure adapts per frame.</p>
+
+        <h3>Revert a photo to its original</h3>
+        <p>Select the photo and run <strong>Library → Plug-in Extras → AI Edit: Revert to Original</strong>. This resets it to Lightroom's default — exactly like the Develop module's Reset button — so it works even on photos edited long ago. Works on a selection too.</p>
+
+        <h3>Give the model a creative direction</h3>
+        <p>Type a short style note in the <em>Style instruction</em> field — describe the <em>look</em>, not the sliders. Good examples: <code>"warm golden-hour skin"</code>, <code>"cool editorial, low saturation"</code>, <code>"punchy and contrasty"</code>. The model still respects exposure/histogram discipline; the note shapes colour and mood.</p>
+
+        <h3>Find out exactly what happened</h3>
+        <p>Open the log at <code>Documents/AIEdit_debug.log</code>. It records every step: the histogram reading, what the model proposed, the exact adjustments applied, and (on preview revert) a check confirming the photo returned cleanly. Send this file along with any bug report.</p>
+      </section>
+
+      <hr class="div">
+
+      <!-- TROUBLESHOOTING -->
+      <section id="troubleshooting">
+        <div class="kicker">Troubleshooting</div>
+        <h2>When something looks wrong</h2>
+        <p class="section-intro">Each entry lists the symptom, the cause, and the fix. Most issues are either strength asked too high, an out-of-date build, or the RAW-vs-JPEG rendering difference. The log at <code>Documents/AIEdit_debug.log</code> tells you which.</p>
+
+        <details class="ts"><summary>The edit is too bright / overexposed</summary>
+          <div class="ts-body">
+            <p class="sym">Symptom: the face comes out blown-out or milky.</p>
+            <p><strong>Cause:</strong> historically two things — adjustment strength asked too high (e.g. a 180% preset), or, on an off-centre subject, the metering reading the dark background as if it were the subject and over-raising exposure.</p>
+            <p><strong>Fix:</strong> set strength to <strong>100%</strong> and re-save any high-strength preset at 100%. The off-centre case is addressed in the current build by skin-tone metering plus a background-detection flag (see <a class="ilink" href="#concepts">Key concepts</a>), so the model exposes to the actual face. Confirm on the <code>Histogram:</code> log line that <code>skinLum</code> reflects the face and, if exposure still looks high, check whether <code>centerReliable=false</code> was correctly flagged.</p>
+          </div>
+        </details>
+
+        <details class="ts"><summary>An off-centre face is mis-exposed (too bright or too dark)</summary>
+          <div class="ts-body">
+            <p class="sym">Symptom: a portrait where the subject sits to one side gets the wrong exposure, as if the background drove the decision.</p>
+            <p><strong>Cause:</strong> the centre-patch metric lands on background, not skin. On its own it would mislead the exposure choice.</p>
+            <p><strong>Fix:</strong> the current build meters a <strong>skin-tone luminance</strong> independent of composition and flags the centre patch as unreliable when it equals the frame average. Check the <code>Histogram:</code> log line: <code>skinPct</code> should be non-trivial (the face was found) and <code>skinLum</code> should match how bright the face actually looks. If <code>skinPct</code> is near zero (face turned away, heavy glasses/hair, unusual light), the plugin falls back to the visible image — give a style hint or adjust exposure manually for that frame.</p>
+          </div>
+        </details>
+
+        <details class="ts"><summary>The dark backdrop turns green or muddy grey</summary>
+          <div class="ts-body">
+            <p class="sym">Symptom: a clean dark-blue or black backdrop becomes olive-green or a flat milky grey.</p>
+            <p><strong>Cause:</strong> two things, both from pushing too hard — an over-aggressive white-balance correction tints the neutral backdrop, and large Shadow/Black lifts haul the dark background up into grey.</p>
+            <p><strong>Fix:</strong> run at <strong>100% strength</strong>. The current build's prompt specifically protects a dark backdrop (gentle shadow lifts, restrained white balance), so this should not happen at normal strength. If it persists, capture the log and the preview screenshot.</p>
+          </div>
+        </details>
+
+        <details class="ts"><summary>The reverted RAW looks flatter / darker than the camera JPEG</summary>
+          <div class="ts-body">
+            <p class="sym">Symptom: after reverting, the NEF/CR2/etc. doesn't match the bright, punchy JPEG the camera produced.</p>
+            <p><strong>Cause:</strong> this is not a bug. A RAW file has no "look" baked in — Lightroom renders it with a neutral profile, which is flatter than the camera's own JPEG (the JPEG has the manufacturer's contrast, tone and colour processing applied in-camera). Reverting returns the RAW to Lightroom's genuine default, which is correct.</p>
+            <p><strong>Fix:</strong> to get closer to the camera look, change the profile in Develop → Basic → <strong>Profile</strong> from "Adobe Color" to <strong>"Camera Standard"</strong> (or the matching maker profile). That's a profile choice, separate from revert.</p>
+          </div>
+        </details>
+
+        <details class="ts"><summary>"Revert to Original" didn't return to the true original</summary>
+          <div class="ts-body">
+            <p class="sym">Symptom (older builds): revert produced an intermediate, still-edited state.</p>
+            <p><strong>Cause:</strong> earlier versions replayed a stored snapshot that could be stale or captured after the photo was already modified.</p>
+            <p><strong>Fix:</strong> the current build restores the saved pre-edit snapshot (the photo's own develop settings from before its first AI edit). Make sure you're on <strong>v1.3.1</strong>. If a photo is stuck in a bad state from old testing, run <strong>Revert to Original</strong> once (or use Lightroom's own Develop → Reset).</p>
+          </div>
+        </details>
+
+        <details class="ts"><summary>Error: "Assertion failed: packed"</summary>
+          <div class="ts-body">
+            <p class="sym">Symptom: an error dialog when reverting.</p>
+            <p><strong>Cause:</strong> revert re-applied the whole <code>getDevelopSettings()</code> blob, which includes string-encoded mask/retouch data that <code>applyDevelopSettings</code> can't unpack.</p>
+            <p><strong>Fix:</strong> resolved in <strong>v1.3.1</strong> — revert (and the preview Revert button) now restore only the develop keys the plugin actually writes, never the full blob. Update to v1.3.1.</p>
+          </div>
+        </details>
+
+        <details class="ts"><summary>Error: "Yielding is not allowed within a C or metamethod call"</summary>
+          <div class="ts-body">
+            <p class="sym">Symptom (older builds): error during revert or apply.</p>
+            <p><strong>Cause:</strong> a yielding SDK call (like <code>applyDevelopSettings</code>) was wrapped in <code>pcall</code>; Lua&nbsp;5.1 can't yield across that boundary.</p>
+            <p><strong>Fix:</strong> resolved in the current build. Update to v1.3.1.</p>
+          </div>
+        </details>
+
+        <details class="ts"><summary>"No photo selected"</summary>
+          <div class="ts-body">
+            <p class="sym">Symptom: the plugin reports nothing is selected.</p>
+            <p><strong>Cause:</strong> no active photo in the Library grid.</p>
+            <p><strong>Fix:</strong> click a photo (or several) in the grid first, then run the command. The plugin uses the current selection, or the active filmstrip photo if none is selected.</p>
+          </div>
+        </details>
+
+        <details class="ts"><summary>The API call fails or times out</summary>
+          <div class="ts-body">
+            <p class="sym">Symptom: an error mentioning the request, or a 401 / authentication failure.</p>
+            <p><strong>Cause:</strong> missing/invalid API key, no internet, or no API credit.</p>
+            <p><strong>Fix:</strong> re-check the key in the dialog for the selected provider (no spaces). Confirm the key is active and funded — Anthropic at <code>console.anthropic.com</code>, OpenAI at <code>platform.openai.com</code>. Check the log line <code>AIProvider: response length</code> for what came back; an <code>API error:</code> line shows the provider's own message (e.g. "model not found" → edit the model string in <code>AIProvider.lua</code>). Verify your connection.</p>
+          </div>
+        </details>
+
+        <details class="ts"><summary>The preview image looks like the old (unedited) version</summary>
+          <div class="ts-body">
+            <p class="sym">Symptom (rare): the preview seems not to reflect the edit.</p>
+            <p><strong>Cause:</strong> Lightroom rebuilds previews lazily and can briefly serve a cached thumbnail.</p>
+            <p><strong>Fix:</strong> the current build forces a fresh render before showing the preview. If you ever see it, click Keep/Revert and check the photo in Loupe view — that's always the ground truth.</p>
+          </div>
+        </details>
+
+        <div class="note warn"><span class="lbl">Still stuck?</span>Grab <code>Documents/AIEdit_debug.log</code> (it logs every step), note your plugin version and Lightroom Classic version, and include a screenshot of the preview. That trio resolves almost everything.</div>
+      </section>
+
+      <hr class="div">
+
+      <!-- HOW IT WORKS -->
+      <section id="how-it-works">
+        <div class="kicker">Explanation</div>
+        <h2>How it works</h2>
+        <p class="section-intro">AI Edit is a Lua plugin running inside Lightroom Classic. It never leaves your machine except for the single HTTPS call to your chosen provider. Here's the architecture, plainly.</p>
+
+        <p>Lightroom's SDK lets a plugin add menu commands, read a photo's metadata and rendered thumbnails, and write develop settings back. AI Edit uses exactly those capabilities: it renders a small JPEG of your photo, analyses it, asks the model what to change, and writes the result back as standard develop settings — the same ones you'd move by hand in the Develop module.</p>
+
+        <p>Because the output is just develop settings, everything is non-destructive and lives in your catalog. Nothing is baked into the file; you can reset at any time.</p>
+      </section>
+
+      <!-- PIPELINE -->
+      <section id="pipeline">
+        <div class="kicker">Explanation</div>
+        <h2>The edit pipeline</h2>
+        <p class="section-intro">What happens between clicking "Analyse &amp; Apply" and seeing the result.</p>
+
+        <div class="diagram">
+          <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Data flow: a photo is rendered and metered, sent to the model, returned as JSON edits, applied, snapshotted, re-rendered, and shown in a preview with keep or revert.">
+            <defs>
+              <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#9a9088"/>
+              </marker>
+              <style>
+                .box{fill:#fff;stroke:#e4dfd4;stroke-width:1.5}
+                .lbl{font-family:'IBM Plex Sans',sans-serif;font-size:12.5px;fill:#16181d;font-weight:600}
+                .sub{font-family:'IBM Plex Mono',monospace;font-size:9.5px;fill:#6c6f7a}
+                .flow{stroke:#9a9088;stroke-width:1.5;fill:none;marker-end:url(#arr)}
+                .accent{fill:#faf2e2;stroke:#ecd9b3}
+                .cloud{fill:#eaf1f5;stroke:#cfe0e9}
+              </style>
+            </defs>
+            <!-- row 1 -->
+            <rect class="box" x="8" y="20" width="150" height="58" rx="9"/>
+            <text class="lbl" x="22" y="44">1 · Photo</text>
+            <text class="sub" x="22" y="60">selected in Library</text>
+
+            <rect class="box accent" x="190" y="20" width="160" height="58" rx="9"/>
+            <text class="lbl" x="204" y="44">2 · Render + meter</text>
+            <text class="sub" x="204" y="60">JPEG thumb · histogram</text>
+
+            <rect class="box cloud" x="382" y="20" width="160" height="58" rx="9"/>
+            <text class="lbl" x="396" y="44">3 · AI provider</text>
+            <text class="sub" x="396" y="60">Claude · GPT</text>
+
+            <rect class="box" x="574" y="20" width="138" height="58" rx="9"/>
+            <text class="lbl" x="588" y="44">4 · JSON edits</text>
+            <text class="sub" x="588" y="60">+ reasoning</text>
+
+            <path class="flow" d="M158,49 L188,49"/>
+            <path class="flow" d="M350,49 L380,49"/>
+            <path class="flow" d="M542,49 L572,49"/>
+            <path class="flow" d="M643,78 L643,110"/>
+
+            <!-- row 2 (right to left) -->
+            <rect class="box accent" x="574" y="112" width="138" height="58" rx="9"/>
+            <text class="lbl" x="588" y="136">5 · Apply</text>
+            <text class="sub" x="588" y="152">develop settings</text>
+
+            <rect class="box" x="382" y="112" width="160" height="58" rx="9"/>
+            <text class="lbl" x="396" y="136">6 · Snapshot</text>
+            <text class="sub" x="396" y="152">scalar settings saved</text>
+
+            <rect class="box" x="190" y="112" width="160" height="58" rx="9"/>
+            <text class="lbl" x="204" y="136">7 · Force render</text>
+            <text class="sub" x="204" y="152">defeat stale cache</text>
+
+            <rect class="box cloud" x="8" y="112" width="150" height="58" rx="9"/>
+            <text class="lbl" x="22" y="136">8 · Preview</text>
+            <text class="sub" x="22" y="152">Keep / Revert</text>
+
+            <path class="flow" d="M572,141 L544,141"/>
+            <path class="flow" d="M380,141 L352,141"/>
+            <path class="flow" d="M188,141 L160,141"/>
+            <path class="flow" d="M83,170 L83,200"/>
+
+            <rect class="box" x="8" y="202" width="150" height="40" rx="9"/>
+            <text class="lbl" x="22" y="226">Keep ✓ / Revert ↺</text>
+          </svg>
+        </div>
+
+        <ol>
+          <li><strong>Render &amp; meter.</strong> The plugin asks Lightroom for two JPEG thumbnails: a 1024px one for the model to look at, and a 400px one it decodes in pure Lua to compute clipping, a <em>skin-tone</em> subject luminance, and a centre-patch luminance with a reliability flag (see <a class="ilink" href="#concepts">Key concepts</a>).</li>
+          <li><strong>Ask the model.</strong> The thumbnail, the histogram numbers, per-photo metadata (camera, lens, ISO, RAW vs JPEG), your style note and the strength guidance are sent to your provider&rsquo;s model (<code>claude-sonnet-4-6</code> or <code>gpt-4o</code>). The system prompt instructs it to trust the histogram over the 8-bit preview and to expose for the subject.</li>
+          <li><strong>Apply.</strong> The model returns a JSON object of adjustments. The plugin maps each to a Lightroom develop key and applies them in one write, after snapshotting the prior state.</li>
+          <li><strong>Preview / revert.</strong> For a single photo with preview on, it forces a fresh render and shows the result with Keep/Revert. Revert restores the exact pre-edit state.</li>
+        </ol>
+      </section>
+
+      <!-- CONCEPTS -->
+      <section id="concepts">
+        <div class="kicker">Explanation</div>
+        <h2>Key concepts</h2>
+
+        <h3>Metering the subject: three signals, different jobs</h3>
+        <p>Getting exposure right means knowing how bright the <em>subject</em> is — which is harder than it sounds when the subject is off-centre or sits against a very dark or bright background. AI Edit measures three things and gives each a specific role:</p>
+        <ul>
+          <li><strong>Clipping / headroom</strong> (how much is blown to white or crushed to black) is <em>authoritative</em>. An 8-bit preview makes bright-but-recoverable areas look identical to truly clipped ones, so here the numbers are trusted over the visual.</li>
+          <li><strong>Skin-tone luminance</strong> is the <em>primary subject signal</em>. The plugin classifies pixels in YCbCr colour space and averages the brightness of those that fall in the skin range — so it reads the actual face wherever it is in the frame. Neutral greys (clothing) and greens (foliage) fall outside the skin range and are ignored.</li>
+          <li><strong>Centre-patch luminance</strong> is a <em>fallback hint</em>, valid only when it's actually on the subject. If the centre reading is about the same as the whole-frame average, the patch is reading background, not a subject — the plugin flags it and tells the model to ignore it for exposure.</li>
+        </ul>
+        <p>The model then fuses these with what it can see: if the numbers say "dark" but the visible face looks fine, the metering is sampling background and exposure is left alone; if the numbers and the visible face agree the subject is dark, exposure is raised. The target is a natural ~48–58% of full scale (about 122–148 on 0–255), and exposure moves stay within ±0.5 EV unless both signals agree a larger move is needed. This is what stops an already well-lit, off-centre face from being blown out — the failure mode of pure centre metering.</p>
+
+        <h3>How strength works</h3>
+        <p>Strength is <em>not</em> a numeric multiplier applied in code. It's sent to the model as a textual instruction ("adjustment strength: N%"), and the model scales the intensity of its own corrections accordingly. 100% is normal; higher asks it to push harder. This keeps the corrections coherent — the model balances exposure, contrast and colour together rather than a blunt scalar inflating every value.</p>
+
+        <h3>Why the feedback loop is diagnostic-only</h3>
+        <p>An earlier version tried to re-measure the photo after editing and auto-correct exposure. Two SDK realities make that unreliable: Lightroom returns a <em>stale cached</em> thumbnail right after an edit, and predicting the result from exposure alone ignores the other tone adjustments and Lightroom's non-linear exposure curve. So re-measuring read wrong values and over-corrected. The loop now only <em>logs</em> a brightness diagnostic; the first pass — which targets the histogram directly — does the real work.</p>
+
+        <h3>How revert works</h3>
+        <p>When applying, the plugin saves the photo's prior develop settings. Both "Revert to Original" and the preview Revert button restore that snapshot — but only for the develop keys the plugin itself writes. Re-applying Lightroom's full settings blob fails (it contains packed mask/retouch data), and an empty-table "reset" is a no-op in the SDK, so restoring the plugin's own keys is the reliable path.</p>
+
+        <h3>RAW vs JPEG</h3>
+        <p>A RAW file carries more highlight/shadow headroom than its 8-bit preview shows, so recovery moves are safe and effective — the plugin tells the model this. It also means a reverted RAW renders flatter than the camera's JPEG, because the JPEG has in-camera processing the RAW doesn't. That's a <a class="ilink" href="#troubleshooting">profile</a> matter, not an edit error.</p>
+      </section>
+
+      <hr class="div">
+
+      <!-- REFERENCE: MODULES -->
+      <section id="ref-modules">
+        <div class="kicker">Reference</div>
+        <h2>Source modules</h2>
+        <p class="section-intro">The plugin is plain Lua against the Lightroom SDK (Lua 5.1 — no <code>goto</code>, no native libraries). Each file has one job. Line counts are a snapshot of v1.3.1 and will drift as the source changes.</p>
+
+        <div class="mod">
+          <div class="mod-head"><span class="fn">Info.lua</span><span class="ln">23 lines · manifest</span></div>
+          <div class="mod-body"><p>Plugin manifest. Declares <code>LrToolkitIdentifier = "io.github.farbener.aiedit"</code>, <code>LrSdkVersion 6.0</code>, the metadata provider, version <code>1.3.1</code>, and the two Library menu items: <em>AI Edit Selected Photo…</em> → <code>AIEditDialog.lua</code> and <em>AI Edit: Revert to Original</em> → <code>AIEditRevert.lua</code>.</p></div>
+        </div>
+
+        <div class="mod">
+          <div class="mod-head"><span class="fn">AIEditDialog.lua</span><span class="ln">785 lines · entry point</span></div>
+          <div class="mod-body">
+            <p>The main flow. Opens with an architecture docblock describing the request flow and SDK constraints. Builds the dialog, gathers thumbnails and metadata, calls the API, applies edits, and runs preview/revert and batch. Everything runs inside <code>LrFunctionContext.postAsyncTaskWithContext</code> (a task is required for thumbnails, the dialog, HTTP and write access).</p>
+            <p><strong>Key internal functions:</strong></p>
+            <p><code>computeEdits(photo, style, strength)</code> — renders thumbs, builds the histogram, gathers metadata, calls the API; returns the proposed edits (plus the pre-edit subject luminance for diagnostics).</p>
+            <p><code>applyEdits(photo, edits)</code> — snapshots the prior scalar settings once, maps the model's keys to develop keys, applies them in one write.</p>
+            <p><code>feedbackCorrect(photo, preLum, exposure)</code> — diagnostic only: logs predicted vs target subject brightness. No auto-correction.</p>
+            <p><code>processOnePhoto(...)</code> / <code>runBatch(...)</code> — single and batch execution with progress and summary.</p>
+            <p><code>getThumbnail(photo, w, h)</code> / <code>measurePhoto(photo, size)</code> — render helpers (named timeout constants; the <code>holdRef</code> GC-retention subtlety is documented inline).</p>
+          </div>
+        </div>
+
+        <div class="mod">
+          <div class="mod-head"><span class="fn">AIProvider.lua</span><span class="ln">319 lines · API client (multi-provider)</span></div>
+          <div class="mod-body">
+            <p>Sends the request to the configured provider and parses the JSON adjustment object. Shared code builds the prompt, attaches the image (pure-Lua base64), strips markdown fences and handles errors; a small <code>ADAPTERS</code> table holds the only per-provider differences — endpoint, request body/headers, and how to extract the reply text. <strong>Anthropic</strong> uses <code>/v1/messages</code> with an <code>x-api-key</code> header and a base64 <code>source</code> block; <strong>OpenAI</strong> uses <code>/v1/chat/completions</code> with Bearer auth, a <code>data:</code> image URI, and JSON mode. Models are pinned per provider in the <code>MODELS</code> table (<code>claude-sonnet-4-6</code>, <code>gpt-4o</code>) — edit those strings to change models.</p>
+            <p>Adding a provider (e.g. Gemini) is one <code>ADAPTERS</code> entry plus one <code>MODELS</code> entry; no other file changes.</p>
+            <p><code>AIProvider.analysePhoto(thumbPath, style, meta, histogram, strength)</code> → <code>ok, editsTable</code>.</p>
+          </div>
+        </div>
+
+        <div class="mod">
+          <div class="mod-head"><span class="fn">Histogram.lua</span><span class="ln">219 lines · metering</span></div>
+          <div class="mod-body"><p>Analyses a JPEG and returns three kinds of signal: clipping/headroom (authoritative), a <strong>skin-tone</strong> luminance (the primary subject-brightness signal, found by classifying pixels in YCbCr), and a centre-patch luminance with a <code>centerReliable</code> flag that is false when the patch is reading background. Plus a text summary for the prompt. <code>Histogram.analyse(path)</code> → <code>summaryString, statsTable</code> (keys include <code>meanLum</code>, <code>skinMeanLum</code>, <code>skinPct</code>, <code>skinReliable</code>, <code>centerMeanLum</code>, <code>centerReliable</code>, <code>clipHiPct</code>, <code>clipLoPct</code>).</p></div>
+        </div>
+
+        <div class="mod">
+          <div class="mod-head"><span class="fn">JpegDecode.lua</span><span class="ln">422 lines · JPEG decoder</span></div>
+          <div class="mod-body"><p>A from-scratch baseline (SOF0) JPEG decoder in pure Lua (Huffman, IDCT, 4:4:4 / 4:2:0 / 4:2:2, restart markers). Needed because the SDK can't load native imaging libraries. Verified against Python PIL during development. Does not support progressive or arithmetic coding (Lightroom thumbnails are baseline).</p></div>
+        </div>
+
+        <div class="mod">
+          <div class="mod-head"><span class="fn">Presets.lua</span><span class="ln">57 lines · presets</span></div>
+          <div class="mod-body"><p>Named recipes (style + strength + flags) stored as JSON in plugin prefs. <code>Presets.names()</code>, <code>Presets.get(name)</code>, <code>Presets.set(...)</code>, <code>Presets.delete(name)</code>.</p></div>
+        </div>
+
+        <div class="mod">
+          <div class="mod-head"><span class="fn">Settings.lua</span><span class="ln">63 lines · preferences</span></div>
+          <div class="mod-body"><p>Persists the chosen provider, a separate API key per provider, and last-used dialog values via <code>LrPrefs</code>. <code>getProvider()/setProvider()</code>, <code>getApiKey(provider)/setApiKey(provider, key)</code>, <code>getLast()/setLast(...)</code>.</p></div>
+        </div>
+
+        <div class="mod">
+          <div class="mod-head"><span class="fn">AIEditRevert.lua</span><span class="ln">133 lines · revert command</span></div>
+          <div class="mod-body"><p>The <em>Revert to Original</em> menu command. Restores the saved pre-edit snapshot for the develop keys the plugin writes (not the full settings blob, which would throw a "packed" error). Header explains the SDK gotchas.</p></div>
+        </div>
+
+        <div class="mod">
+          <div class="mod-head"><span class="fn">AIEditMetadata.lua</span><span class="ln">15 lines · metadata field</span></div>
+          <div class="mod-body"><p>Declares the hidden <code>preEditSettings</code> metadata field used to store the pre-edit snapshot on the photo.</p></div>
+        </div>
+
+        <div class="mod">
+          <div class="mod-head"><span class="fn">Log.lua</span><span class="ln">42 lines · logging</span></div>
+          <div class="mod-body"><p>Timestamped logging to <code>Documents/AIEdit_debug.log</code>. <code>Log.reset()</code> (truncate at load), <code>Log.write(message)</code>.</p></div>
+        </div>
+
+        <div class="mod">
+          <div class="mod-head"><span class="fn">dkjson.lua</span><span class="ln">714 lines · bundled lib</span></div>
+          <div class="mod-body"><p>Third-party JSON encode/decode (David Kolf's dkjson). Bundled because the SDK has no built-in JSON module.</p></div>
+        </div>
+      </section>
+
+      <!-- REFERENCE: KEY MAP -->
+      <section id="ref-keys">
+        <div class="kicker">Reference</div>
+        <h2>Develop-key map</h2>
+        <p class="section-intro">The model returns friendly keys; the plugin maps each to the real Lightroom develop setting (the <code>SETTING_MAP</code> table in <code>AIEditDialog.lua</code>). Tonal keys use the modern Process-Version-2012 names — using the legacy names on a modern photo silently does nothing, which was an early bug.</p>
+        <div class="tbl-wrap"><table class="t-mono">
+          <thead><tr><th>Model key</th><th>Lightroom develop key</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Exposure</td><td>Exposure2012</td><td>Stops, −5…+5</td></tr>
+            <tr><td>Contrast</td><td>Contrast2012</td><td>−100…100</td></tr>
+            <tr><td>Highlights</td><td>Highlights2012</td><td>−100…100</td></tr>
+            <tr><td>Shadows</td><td>Shadows2012</td><td>−100…100</td></tr>
+            <tr><td>Whites</td><td>Whites2012</td><td>−100…100</td></tr>
+            <tr><td>Blacks</td><td>Blacks2012</td><td>−100…100</td></tr>
+            <tr><td>Clarity</td><td>Clarity2012</td><td>−100…100</td></tr>
+            <tr><td>Texture / Dehaze</td><td>Texture / Dehaze</td><td>Version-independent</td></tr>
+            <tr><td>Vibrance / Saturation</td><td>Vibrance / Saturation</td><td>−100…100</td></tr>
+            <tr><td>ColorTempKelvin</td><td>Temperature</td><td>White balance, Kelvin</td></tr>
+            <tr><td>Tint</td><td>Tint</td><td>Green ↔ magenta</td></tr>
+            <tr><td>Hue/Sat/Lum&nbsp;×8</td><td>HueAdjustment* / SaturationAdjustment* / LuminanceAdjustment*</td><td>Per-colour HSL (Red…Magenta)</td></tr>
+            <tr><td>VignetteAmount</td><td>PostCropVignetteAmount</td><td>Artistic vignette, not lens correction</td></tr>
+            <tr><td>Sharpness</td><td>Sharpness</td><td>0…150</td></tr>
+            <tr><td>NoiseReduction</td><td>LuminanceSmoothing</td><td>0…100</td></tr>
+            <tr><td>GrainAmount</td><td>GrainAmount</td><td>0…100</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <!-- REFERENCE: SCHEMA -->
+      <section id="ref-schema">
+        <div class="kicker">Reference</div>
+        <h2>Adjustment schema</h2>
+        <p class="section-intro">The model is required to return a single JSON object — no prose, no code fences — with these keys. All are numeric except <code>reasoning</code>. The plugin maps each key to a develop setting (see the key map) and applies the values directly; it does not multiply them by the strength setting.</p>
+        <pre><button class="copy" type="button">copy</button><code><span class="tok-c">// every key numeric except "reasoning"</span>
+{
+  <span class="tok-s">"Exposure"</span>: <span class="tok-k">1.2</span>,            <span class="tok-c">// stops, -5..+5</span>
+  <span class="tok-s">"Contrast"</span>: <span class="tok-k">10</span>,
+  <span class="tok-s">"Highlights"</span>: <span class="tok-k">-45</span>,
+  <span class="tok-s">"Shadows"</span>: <span class="tok-k">25</span>,
+  <span class="tok-s">"Whites"</span>: <span class="tok-k">-15</span>,
+  <span class="tok-s">"Blacks"</span>: <span class="tok-k">5</span>,
+  <span class="tok-s">"Texture"</span>: <span class="tok-k">20</span>,
+  <span class="tok-s">"Clarity"</span>: <span class="tok-k">10</span>,
+  <span class="tok-s">"Dehaze"</span>: <span class="tok-k">0</span>,
+  <span class="tok-s">"Vibrance"</span>: <span class="tok-k">12</span>,
+  <span class="tok-s">"Saturation"</span>: <span class="tok-k">5</span>,
+  <span class="tok-s">"ColorTempKelvin"</span>: <span class="tok-k">5400</span>,  <span class="tok-c">// white balance</span>
+  <span class="tok-s">"Tint"</span>: <span class="tok-k">4</span>,
+  <span class="tok-s">"HueRed"</span>: <span class="tok-k">0</span>, <span class="tok-c">… HueMagenta  // 8 channels</span>
+  <span class="tok-s">"SatRed"</span>: <span class="tok-k">0</span>, <span class="tok-c">… SatMagenta  // 8 channels</span>
+  <span class="tok-s">"LumRed"</span>: <span class="tok-k">0</span>, <span class="tok-c">… LumMagenta  // 8 channels</span>
+  <span class="tok-s">"VignetteAmount"</span>: <span class="tok-k">-10</span>,
+  <span class="tok-s">"GrainAmount"</span>: <span class="tok-k">0</span>,
+  <span class="tok-s">"Sharpness"</span>: <span class="tok-k">60</span>,
+  <span class="tok-s">"NoiseReduction"</span>: <span class="tok-k">15</span>,
+  <span class="tok-s">"reasoning"</span>: <span class="tok-s">"Subject centre at 30% … lifted exposure +1.2 …"</span>
+}</code></pre>
+        <div class="note tip"><span class="lbl">Prompt discipline</span>The system prompt tells the model to trust the measured histogram over the 8-bit preview, expose for the <em>subject</em> centre, protect a dark backdrop from white-balance shifts and heavy shadow lifts, and recover highlights decisively on RAW files. The strength value is included here as guidance, so the model scales its own corrections.</div>
+      </section>
+
+      <!-- REFERENCE: SETTINGS/FILES -->
+      <section id="ref-settings">
+        <div class="kicker">Reference</div>
+        <h2>Settings &amp; files</h2>
+        <div class="tbl-wrap"><table class="t-mono">
+          <thead><tr><th>Item</th><th>Location / value</th></tr></thead>
+          <tbody>
+            <tr><td>Plugin identifier</td><td>io.github.farbener.aiedit</td></tr>
+            <tr><td>Version</td><td>1.3.1</td></tr>
+            <tr><td>Providers</td><td>Anthropic (claude-sonnet-4-6) · OpenAI (gpt-4o)</td></tr>
+            <tr><td>API endpoints</td><td>api.anthropic.com/v1/messages · api.openai.com/v1/chat/completions</td></tr>
+            <tr><td>Menu items</td><td>Library → Plug-in Extras → "AI Edit Selected Photo…" · "AI Edit: Revert to Original"</td></tr>
+            <tr><td>API key storage</td><td>Lightroom plugin prefs (LrPrefs), one key per provider — on your machine</td></tr>
+            <tr><td>Presets storage</td><td>Lightroom plugin prefs (JSON)</td></tr>
+            <tr><td>Per-photo snapshot</td><td>hidden metadata field <code>preEditSettings</code></td></tr>
+            <tr><td>Log file</td><td>Documents/AIEdit_debug.log</td></tr>
+            <tr><td>SDK requirement</td><td>Lightroom Classic, SDK 6.0+ (Lua 5.1)</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <!-- CHANGELOG -->
+      <section id="changelog">
+        <div class="kicker">Reference</div>
+        <h2>Changelog &amp; known limits</h2>
+
+        <h3>v1.3.1 — current</h3>
+        <ul>
+          <li><strong>Fixed "Revert to Original" doing nothing.</strong> The previous approach relied on an empty-table reset, which is a no-op in the SDK. Revert now restores the saved pre-edit snapshot (the photo's own develop settings from before its first AI edit).</li>
+          <li><strong>Fixed "Assertion failed: packed" on revert.</strong> Revert and the preview Revert button now restore only the develop keys the plugin actually writes, instead of the whole getDevelopSettings() blob (which carries string-encoded mask/retouch data that can't be re-applied).</li>
+          <li>Cosmetic: provider-neutral plugin name and dialog subtitle; removed the website link from the Plug-in Manager page.</li>
+        </ul>
+
+        <h3>v1.3.0</h3>
+        <ul>
+          <li><strong>Skin-tone subject metering.</strong> <code>Histogram.lua</code> now classifies skin pixels (YCbCr) and reports their luminance as the primary subject-brightness signal — so exposure targets the actual face regardless of where it sits in the frame. Neutral clothing and foliage are excluded.</li>
+          <li><strong>Metering-reliability flag.</strong> When the centre patch ≈ the frame average, it's flagged as reading background and excluded from the exposure decision.</li>
+          <li><strong>Exposure fusion in the prompt.</strong> Clipping numbers are authoritative; subject brightness comes from skin metering cross-checked against the visible image; exposure stays within ±0.5 EV unless both signals agree on more. Target band lowered to a natural ~48–58%. This removes the over-brightening of well-lit, off-centre faces.</li>
+        </ul>
+
+        <h3>v1.2.0</h3>
+        <ul>
+          <li><strong>Multiple AI providers.</strong> Choose Anthropic (Claude) or OpenAI (ChatGPT) from a dropdown; API keys are stored separately per provider so you can keep both. Built as a clean adapter layer (<code>AIProvider.lua</code>) so adding another provider later is a one-entry change.</li>
+          <li>Provider-aware dialog: the key label and "get your key at…" hint follow the selected provider; choice and key persist between runs.</li>
+          <li>Renamed the API module <code>ClaudeAPI.lua</code> → <code>AIProvider.lua</code> and made the dialog title and messages provider-neutral.</li>
+        </ul>
+
+        <h3>v1.1.0</h3>
+        <ul>
+          <li>Visual preview with rendered image, adjustment list, reasoning, and Keep/Revert.</li>
+          <li>Named presets, last-used recall, and per-photo metadata context (camera, lens, ISO, RAW/JPEG).</li>
+          <li>Dark-backdrop prompt protection (gentle shadow lifts, restrained white balance).</li>
+          <li>True-reset revert (both menu command and preview revert) — no more stale-snapshot reverts.</li>
+          <li>All-scalar snapshots (fixes the "packed" assertion) and removal of the <code>pcall</code> that caused the yielding error.</li>
+          <li>Feedback loop changed to diagnostic-only logging after the post-edit re-measure proved unreliable.</li>
+          <li>Detailed step-by-step logging, including a post-revert verification check.</li>
+          <li>Source documentation pass: module headers, named constants, corrected comments for handoff.</li>
+        </ul>
+
+        <h3>Known limits</h3>
+        <ul>
+          <li><strong>Lightroom Classic only</strong> — the cloud app has no SDK.</li>
+          <li>Visual preview is <strong>single-photo</strong>; batches apply directly with a summary.</li>
+          <li>A reverted RAW matches Lightroom's neutral render, not the camera JPEG (use a Camera Standard profile to close the gap).</li>
+          <li>Post-edit re-measurement isn't reliable in the SDK (stale previews), so exposure rides on the model's first pass.</li>
+          <li>The system prompt was tuned with Claude; OpenAI may need minor prompt re-tuning to match exposure discipline exactly.</li>
+          <li>The SDK can't add toolbar or filmstrip buttons — commands live in the Library menu.</li>
+        </ul>
+      </section>
+
+      <footer>
+        AI Edit v1.3.1 · plugin documentation · io.github.farbener.aiedit<br>
+        A Lightroom Classic plugin. Supports Anthropic Claude and OpenAI APIs.
+      </footer>
+
+    </div>
+  </main>
+</div>
+
+<script>
+/* All page behaviour lives in this one IIFE so nothing leaks to the global
+   scope. Three jobs: mobile nav toggle, active-section highlight, copy buttons. */
+(function () {
+  "use strict";
+
+  /* ---- Mobile navigation (slide-in sidebar + scrim) ---- */
+  var sidebar = document.getElementById("sidebar");
+  var scrim   = document.getElementById("scrim");
+  var menuBtn = document.getElementById("menuBtn");
+
+  function setNav(open) {
+    if (!sidebar) return;
+    sidebar.classList.toggle("open", open);
+    if (scrim) scrim.classList.toggle("show", open);
+    if (menuBtn) menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  if (menuBtn) {
+    menuBtn.addEventListener("click", function () {
+      setNav(!sidebar.classList.contains("open"));
+    });
+  }
+  if (scrim) scrim.addEventListener("click", function () { setNav(false); });
+
+  /* ---- Active-section highlight in the sidebar ----
+     Maps each nav link to its target section, then uses an IntersectionObserver
+     to mark the link active as its section scrolls into the upper viewport. */
+  var links = Array.prototype.slice.call(document.querySelectorAll("#nav a"));
+  var linkFor = {};
+  links.forEach(function (a) {
+    var id = a.getAttribute("href").slice(1);
+    if (document.getElementById(id)) linkFor[id] = a;
+  });
+
+  if ("IntersectionObserver" in window) {
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        links.forEach(function (l) { l.classList.remove("active"); });
+        if (linkFor[entry.target.id]) linkFor[entry.target.id].classList.add("active");
+      });
+    }, { rootMargin: "-20% 0px -70% 0px", threshold: 0 });
+
+    Object.keys(linkFor).forEach(function (id) {
+      observer.observe(document.getElementById(id));
+    });
+  }
+
+  /* Close the mobile nav after following a link. */
+  links.forEach(function (a) {
+    a.addEventListener("click", function () {
+      if (window.innerWidth <= 880) setNav(false);
+    });
+  });
+
+  /* ---- Copy buttons on code blocks ----
+     Guarded: the async Clipboard API is unavailable in some contexts (e.g. a
+     plain file:// page in certain browsers), so we feature-detect and fail
+     quietly rather than throw. */
+  document.querySelectorAll("pre .copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var code = btn.parentElement.querySelector("code");
+      if (!code) return;
+      var text = code.innerText;
+      var done = function () {
+        var original = btn.textContent;
+        btn.textContent = "copied";
+        setTimeout(function () { btn.textContent = original; }, 1200);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function () {
+          btn.textContent = "copy failed";
+        });
+      } else {
+        btn.textContent = "unavailable"; /* no Clipboard API in this context */
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
