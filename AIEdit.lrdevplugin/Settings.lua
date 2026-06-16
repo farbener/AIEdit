@@ -1,10 +1,10 @@
 -- Settings.lua
 -- Persists the chosen AI provider, per-provider API keys, and last-used dialog
 -- values using LrPrefs (per-plugin, stored by Lightroom on the local machine —
--- API keys never leave it).
+-- API keys never leave it). Providers: "anthropic", "openai", "ollama".
 --
 -- PUBLIC API
---   Settings.getProvider() / Settings.setProvider(id)   -- "anthropic" | "openai"
+--   Settings.getProvider() / Settings.setProvider(id)   -- "anthropic" | "openai" | "ollama"
 --   Settings.getApiKey(provider) / Settings.setApiKey(provider, key)
 --   Settings.getLast()  → { style, strength, feedback, preview }
 --   Settings.setLast(style, strength, feedback, preview)
@@ -27,7 +27,7 @@ end
 
 -- API keys are stored per provider (prefs.apiKey_anthropic, prefs.apiKey_openai)
 -- so switching providers never clobbers the other key.
---   provider : "anthropic" | "openai" (defaults to the current provider)
+--   provider : "anthropic" | "openai" | "ollama" (defaults to the current provider)
 function Settings.getApiKey(provider)
     provider = provider or Settings.getProvider()
     local key = prefs["apiKey_" .. provider]

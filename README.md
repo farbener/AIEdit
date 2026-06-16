@@ -9,6 +9,8 @@ It is built for portraits and tuned to get the **subject** correctly exposed wit
 > [!NOTE]
 > **Disclaimer: this plugin was "vibe coded."** It was built collaboratively with an AI assistant, iterating by feel and testing as we went, rather than through a formal engineering process. It has been exercised across its features and works — but it has not been through rigorous QA, and it talks to paid third‑party APIs and writes to your Lightroom catalog. Use it at your own risk, keep backups of anything you care about, and treat the AI's edits as a starting point. PRs and bug reports welcome.
 
+**📖 [Read the full documentation](https://farbener.github.io/AIEdit/AIEdit-Documentation.html)** — install guide, tutorial, how it works, and troubleshooting.
+
 ---
 
 ## Features
@@ -36,7 +38,7 @@ It is built for portraits and tuned to get the **subject** correctly exposed wit
 
 ## Installation
 
-1. Download the latest release (or clone this repo).
+1. Download `AIEdit.lrplugin.zip` from the [latest release](https://github.com/farbener/AIEdit/releases/latest) (or clone this repo).
 2. You should have a folder named **`AIEdit.lrdevplugin`**. Put it somewhere permanent (not your Downloads folder).
 3. In Lightroom Classic: **File → Plug‑in Manager… → Add**, select the `AIEdit.lrdevplugin` folder, then **Done**.
 4. Select a photo, run **Library → Plug‑in Extras → AI Edit Selected Photo…**, choose your provider, and paste your API key (it's saved automatically).

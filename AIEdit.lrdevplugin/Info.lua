@@ -19,5 +19,5 @@ return {
 
     LrExportMenuItems = nil,
 
-    VERSION = { major = 1, minor = 3, revision = 1 },
+    VERSION = { major = 1, minor = 4, revision = 0 },
 }

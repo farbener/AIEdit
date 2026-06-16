@@ -453,6 +453,7 @@ LrFunctionContext.postAsyncTaskWithContext("AIEdit", function(context)
     local providerItems = {
         { title = "Anthropic (Claude)", value = "anthropic" },
         { title = "OpenAI (ChatGPT)",   value = "openai" },
+        { title = "Ollama (Local)",     value = "ollama" },
     }
     -- "Get your key at …" hint per provider, shown under the key field.
     local providerKeyHint = {
@@ -609,6 +610,7 @@ LrFunctionContext.postAsyncTaskWithContext("AIEdit", function(context)
                 transform = function(p) return (p == "openai") and "OpenAI API Key:" or "Anthropic API Key:" end,
             },
             font = "<system/bold>",
+            visible = LrView.bind { key = "provider", transform = function(p) return p ~= "ollama" end },
         },
         f:static_text {
             title = LrView.bind {
@@ -616,10 +618,23 @@ LrFunctionContext.postAsyncTaskWithContext("AIEdit", function(context)
                 transform = function(p) return providerKeyHint[p] or providerKeyHint.anthropic end,
             },
             font  = "<system/small>",
+            visible = LrView.bind { key = "provider", transform = function(p) return p ~= "ollama" end },
         },
         f:edit_field {
             value          = LrView.bind("apiKey"),
             width_in_chars = 52,
+            visible = LrView.bind { key = "provider", transform = function(p) return p ~= "ollama" end },
+        },
+        -- Ollama runs locally and needs no key; show the endpoint as read-only info.
+        f:static_text {
+            title = "Local Ollama — no API key needed.",
+            font  = "<system/bold>",
+            visible = LrView.bind { key = "provider", transform = function(p) return p == "ollama" end },
+        },
+        f:static_text {
+            title = "Endpoint: http://localhost:11434/v1/chat/completions",
+            font  = "<system/small>",
+            visible = LrView.bind { key = "provider", transform = function(p) return p == "ollama" end },
         },
     }
     Log.write("Main: dialog contents built OK")

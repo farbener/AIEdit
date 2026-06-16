@@ -4,6 +4,22 @@ All notable changes to this project are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions use the plugin's
 `Info.lua` version number.
 
+## [1.4.0]
+
+### Added
+- **Ollama (local) provider.** Run a local vision model via Ollama's
+  OpenAI-compatible endpoint (`http://localhost:11434/v1/chat/completions`),
+  no API key required. Selectable in the dialog; the key field is hidden and the
+  endpoint is shown as read-only info. Default model `qwen2.5vl:7b` (edit the
+  `MODELS` table to change it). Anthropic and OpenAI are unchanged.
+
+### Changed
+- **More robust JSON extraction.** The reply parser now extracts the JSON object
+  directly (first `{` to last `}`) instead of relying on matched markdown fence
+  pairs — local models sometimes wrap output in a fence and omit the closing one.
+- Ollama requests use a higher `max_tokens` ceiling (2048) since local models can
+  be more verbose; cloud providers are unchanged.
+
 ## [1.3.1]
 
 ### Fixed

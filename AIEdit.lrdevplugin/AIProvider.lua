@@ -1,5 +1,5 @@
 --[[============================================================================
-  AIProvider.lua  —  multi-provider AI client (Anthropic Claude / OpenAI)
+  AIProvider.lua  —  multi-provider AI client (Anthropic Claude / OpenAI / Ollama)
 
   Builds the request (image + histogram + metadata + style), sends it to the
   configured provider, and parses the JSON adjustment object the model returns.
@@ -42,6 +42,7 @@ local AIProvider = {}
 local MODELS = {
     anthropic = "claude-sonnet-4-6",
     openai    = "gpt-4o",
+    ollama    = "qwen2.5vl:7b",
 }
 
 -- Per-provider adapters (see "HOW PROVIDERS WORK" above).
@@ -121,6 +122,42 @@ local ADAPTERS = {
             return parsed.choices[1].message.content
         end,
     },
+
+    -- ── Ollama (local): OpenAI-compatible /v1/chat/completions on localhost,
+    --    no auth header. response_format is omitted because local models may
+    --    not support JSON mode; the shared prompt already asks for raw JSON and
+    --    the parser strips any markdown fences. apiKey is ignored. ────────────
+    ollama = {
+        url = "http://localhost:11434/v1/chat/completions",
+        buildRequest = function(systemPrompt, userText, imgB64, apiKey, model)
+            local body = json.encode({
+                model      = model,
+                max_tokens = 2048,   -- higher ceiling: local models can be verbose
+                messages   = {
+                    { role = "system", content = systemPrompt },
+                    {
+                        role    = "user",
+                        content = {
+                            { type = "text", text = userText },
+                            { type = "image_url",
+                              image_url = { url = "data:image/jpeg;base64," .. imgB64 } },
+                        },
+                    },
+                },
+            })
+            local headers = {
+                { field = "Content-Type", value = "application/json" },
+            }
+            return body, headers
+        end,
+        parseText = function(parsed)
+            if not (parsed.choices and parsed.choices[1]
+                    and parsed.choices[1].message and parsed.choices[1].message.content) then
+                return nil, "Unexpected Ollama response structure."
+            end
+            return parsed.choices[1].message.content
+        end,
+    },
 }
 
 -- ── Pure-Lua base64 encoder ───────────────────────────────────────────────────
@@ -192,7 +229,7 @@ function AIProvider.analysePhoto(thumbPath, stylePrompt, metadata, histogramStr,
     end
 
     local apiKey = Settings.getApiKey(provider)
-    if not apiKey or apiKey == "" then
+    if provider ~= "ollama" and (not apiKey or apiKey == "") then
         return false, "No API key set for " .. provider .. ". Enter it in the dialog."
     end
 
@@ -305,10 +342,16 @@ reasoning (string, 1-2 sentences; mention how the histogram drove your highlight
         return false, textErr or "Could not read model reply."
     end
 
-    -- Strip accidental markdown fences if the model added them despite the prompt.
-    local jsonText = rawText:match("```json%s*(.-)%s*```") or
-                     rawText:match("```%s*(.-)%s*```")     or
-                     rawText
+    -- Models (especially local ones) sometimes wrap the JSON in a markdown
+    -- fence or surrounding prose, and may even omit the *closing* fence — which
+    -- defeats fence-pair matching. Rather than depend on matched fences, extract
+    -- the JSON object directly: everything from the first "{" to the last "}".
+    local jsonText   = rawText
+    local braceStart = rawText:find("{")
+    local braceEnd   = select(2, rawText:find(".*}"))   -- index of the last "}"
+    if braceStart and braceEnd and braceEnd >= braceStart then
+        jsonText = rawText:sub(braceStart, braceEnd)
+    end
 
     local edits, _, editErr = json.decode(jsonText)
     if not edits or type(edits) ~= "table" then

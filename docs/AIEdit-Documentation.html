@@ -321,7 +321,7 @@
         <div class="brand-sub">Lightroom Classic plugin</div>
       </div>
     </div>
-    <span class="ver">v1.3.1 · io.github.farbener.aiedit</span>
+    <span class="ver">v1.4.0 · io.github.farbener.aiedit</span>
 
     <nav class="nav" id="nav" aria-label="Documentation sections">
       <div class="nav-group">
@@ -378,7 +378,7 @@
 
         <div class="note key">
           <span class="lbl">At a glance</span>
-          Works in <strong>Lightroom Classic only</strong> (the cloud "Lightroom" has no plugin SDK). Needs an API key for your chosen provider — <strong>Anthropic (Claude)</strong> or <strong>OpenAI (ChatGPT)</strong>. Uses <code>claude-sonnet-4-6</code> or <code>gpt-4o</code> respectively. Edits are non-destructive — they're Lightroom develop settings you can reset at any time.
+          Works in <strong>Lightroom Classic only</strong> (the cloud "Lightroom" has no plugin SDK). Needs an API key for a cloud provider — <strong>Anthropic (Claude)</strong> or <strong>OpenAI (ChatGPT)</strong> — or runs fully local via <strong>Ollama</strong> with no key. Uses <code>claude-sonnet-4-6</code>, <code>gpt-4o</code>, or a local model (<code>qwen2.5vl:7b</code>) respectively. Edits are non-destructive — they're Lightroom develop settings you can reset at any time.
         </div>
 
         <h3>Who this is for</h3>
@@ -408,7 +408,7 @@
           </li>
           <li>
             <h4>Choose a provider &amp; add your API key</h4>
-            <p>Select a photo in the <strong>Library</strong> grid, then run <strong>Library → Plug-in Extras → AI Edit Selected Photo…</strong> Near the bottom, pick your <em>AI provider</em> — Anthropic (Claude) or OpenAI (ChatGPT) — then paste the matching API key into the key field. It's saved automatically, separately per provider, so you can keep both.</p>
+            <p>Select a photo in the <strong>Library</strong> grid, then run <strong>Library → Plug-in Extras → AI Edit Selected Photo…</strong> Near the bottom, pick your <em>AI provider</em> — Anthropic (Claude), OpenAI (ChatGPT), or Ollama (Local) — then paste the matching API key (cloud providers only; Ollama needs none). Keys are saved automatically, separately per provider.</p>
             <div class="note tip"><span class="lbl">Where to get a key</span>Anthropic: <code>console.anthropic.com</code> → API Keys. OpenAI: <code>platform.openai.com</code> → API keys. Your key stays on your machine (in Lightroom's plugin preferences) and is sent only to the provider you selected.</div>
           </li>
           <li>
@@ -444,7 +444,7 @@
             <tr><td><strong>Adjustment strength</strong></td><td>Tells the model how hard to push. 100% = normal.</td><td>100%</td></tr>
             <tr><td><strong>Preview before applying</strong></td><td>Shows the rendered result with Keep / Revert (single photo only).</td><td>On</td></tr>
             <tr><td><strong>Log exposure diagnostic</strong></td><td>Writes subject-brightness analysis to the log. No effect on the edit.</td><td>Off</td></tr>
-            <tr><td><strong>AI provider</strong></td><td>Which model answers — Anthropic (Claude) or OpenAI (ChatGPT).</td><td>Your choice</td></tr>
+            <tr><td><strong>AI provider</strong></td><td>Which model answers — Anthropic (Claude), OpenAI (ChatGPT), or Ollama (local, no key).</td><td>Your choice</td></tr>
             <tr><td><strong>API key</strong></td><td>The key for the selected provider. Stored separately per provider.</td><td>Your key</td></tr>
           </tbody>
         </table></div>
@@ -721,7 +721,7 @@
       <section id="ref-modules">
         <div class="kicker">Reference</div>
         <h2>Source modules</h2>
-        <p class="section-intro">The plugin is plain Lua against the Lightroom SDK (Lua 5.1 — no <code>goto</code>, no native libraries). Each file has one job. Line counts are a snapshot of v1.3.1 and will drift as the source changes.</p>
+        <p class="section-intro">The plugin is plain Lua against the Lightroom SDK (Lua 5.1 — no <code>goto</code>, no native libraries). Each file has one job. Line counts are a snapshot of v1.4.0 and will drift as the source changes.</p>
 
         <div class="mod">
           <div class="mod-head"><span class="fn">Info.lua</span><span class="ln">23 lines · manifest</span></div>
@@ -729,7 +729,7 @@
         </div>
 
         <div class="mod">
-          <div class="mod-head"><span class="fn">AIEditDialog.lua</span><span class="ln">785 lines · entry point</span></div>
+          <div class="mod-head"><span class="fn">AIEditDialog.lua</span><span class="ln">801 lines · entry point</span></div>
           <div class="mod-body">
             <p>The main flow. Opens with an architecture docblock describing the request flow and SDK constraints. Builds the dialog, gathers thumbnails and metadata, calls the API, applies edits, and runs preview/revert and batch. Everything runs inside <code>LrFunctionContext.postAsyncTaskWithContext</code> (a task is required for thumbnails, the dialog, HTTP and write access).</p>
             <p><strong>Key internal functions:</strong></p>
@@ -742,9 +742,9 @@
         </div>
 
         <div class="mod">
-          <div class="mod-head"><span class="fn">AIProvider.lua</span><span class="ln">319 lines · API client (multi-provider)</span></div>
+          <div class="mod-head"><span class="fn">AIProvider.lua</span><span class="ln">364 lines · API client (multi-provider)</span></div>
           <div class="mod-body">
-            <p>Sends the request to the configured provider and parses the JSON adjustment object. Shared code builds the prompt, attaches the image (pure-Lua base64), strips markdown fences and handles errors; a small <code>ADAPTERS</code> table holds the only per-provider differences — endpoint, request body/headers, and how to extract the reply text. <strong>Anthropic</strong> uses <code>/v1/messages</code> with an <code>x-api-key</code> header and a base64 <code>source</code> block; <strong>OpenAI</strong> uses <code>/v1/chat/completions</code> with Bearer auth, a <code>data:</code> image URI, and JSON mode. Models are pinned per provider in the <code>MODELS</code> table (<code>claude-sonnet-4-6</code>, <code>gpt-4o</code>) — edit those strings to change models.</p>
+            <p>Sends the request to the configured provider and parses the JSON adjustment object. Shared code builds the prompt, attaches the image (pure-Lua base64), strips markdown fences and handles errors; a small <code>ADAPTERS</code> table holds the only per-provider differences — endpoint, request body/headers, and how to extract the reply text. <strong>Anthropic</strong> uses <code>/v1/messages</code> with an <code>x-api-key</code> header and a base64 <code>source</code> block; <strong>OpenAI</strong> uses <code>/v1/chat/completions</code> with Bearer auth, a <code>data:</code> image URI, and JSON mode; <strong>Ollama</strong> (local) uses the OpenAI-compatible <code>/v1/chat/completions</code> on <code>localhost:11434</code> with no auth header and no forced JSON mode. Models are pinned per provider in the <code>MODELS</code> table (<code>claude-sonnet-4-6</code>, <code>gpt-4o</code>, <code>qwen2.5vl:7b</code>) — edit those strings to change models. The reply parser extracts the JSON object directly (first <code>{</code> to last <code>}</code>), so it tolerates models that wrap output in markdown fences or omit the closing fence.</p>
             <p>Adding a provider (e.g. Gemini) is one <code>ADAPTERS</code> entry plus one <code>MODELS</code> entry; no other file changes.</p>
             <p><code>AIProvider.analysePhoto(thumbPath, style, meta, histogram, strength)</code> → <code>ok, editsTable</code>.</p>
           </div>
@@ -860,8 +860,8 @@
           <tbody>
             <tr><td>Plugin identifier</td><td>io.github.farbener.aiedit</td></tr>
             <tr><td>Version</td><td>1.3.1</td></tr>
-            <tr><td>Providers</td><td>Anthropic (claude-sonnet-4-6) · OpenAI (gpt-4o)</td></tr>
-            <tr><td>API endpoints</td><td>api.anthropic.com/v1/messages · api.openai.com/v1/chat/completions</td></tr>
+            <tr><td>Providers</td><td>Anthropic (claude-sonnet-4-6) · OpenAI (gpt-4o) · Ollama / local (qwen2.5vl:7b)</td></tr>
+            <tr><td>API endpoints</td><td>api.anthropic.com/v1/messages · api.openai.com/v1/chat/completions · localhost:11434/v1/chat/completions (Ollama)</td></tr>
             <tr><td>Menu items</td><td>Library → Plug-in Extras → "AI Edit Selected Photo…" · "AI Edit: Revert to Original"</td></tr>
             <tr><td>API key storage</td><td>Lightroom plugin prefs (LrPrefs), one key per provider — on your machine</td></tr>
             <tr><td>Presets storage</td><td>Lightroom plugin prefs (JSON)</td></tr>
@@ -877,7 +877,13 @@
         <div class="kicker">Reference</div>
         <h2>Changelog &amp; known limits</h2>
 
-        <h3>v1.3.1 — current</h3>
+        <h3>v1.4.0 — current</h3>
+        <ul>
+          <li><strong>Ollama (local) provider.</strong> Run a local vision model via Ollama's OpenAI-compatible endpoint (<code>localhost:11434</code>), no API key needed. The dialog hides the key field and shows the endpoint instead. Default model <code>qwen2.5vl:7b</code>. Anthropic and OpenAI unchanged.</li>
+          <li><strong>More robust JSON extraction.</strong> The parser now reads the JSON object directly (first <code>{</code> to last <code>}</code>) instead of relying on matched markdown fences — local models sometimes wrap output in a fence and drop the closing one.</li>
+        </ul>
+
+        <h3>v1.3.1</h3>
         <ul>
           <li><strong>Fixed "Revert to Original" doing nothing.</strong> The previous approach relied on an empty-table reset, which is a no-op in the SDK. Revert now restores the saved pre-edit snapshot (the photo's own develop settings from before its first AI edit).</li>
           <li><strong>Fixed "Assertion failed: packed" on revert.</strong> Revert and the preview Revert button now restore only the develop keys the plugin actually writes, instead of the whole getDevelopSettings() blob (which carries string-encoded mask/retouch data that can't be re-applied).</li>
@@ -922,7 +928,7 @@
       </section>
 
       <footer>
-        AI Edit v1.3.1 · plugin documentation · io.github.farbener.aiedit<br>
+        AI Edit v1.4.0 · plugin documentation · io.github.farbener.aiedit<br>
         A Lightroom Classic plugin. Supports Anthropic Claude and OpenAI APIs.
       </footer>
 
