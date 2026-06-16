@@ -224,10 +224,18 @@ local function applyEdits(photo, edits)
         for ourKey, lrKey in pairs(SETTING_MAP) do
             local val = edits[ourKey]
             if val ~= nil and type(val) == "number" then
-                settings[lrKey] = val
-                applied = applied + 1
-                if val ~= 0 then
-                    logParts[#logParts + 1] = ourKey .. "=" .. tostring(val)
+                -- Temperature is Kelvin (valid ~2000-50000). A 0 or other tiny
+                -- value — e.g. from a model that emitted a placeholder we coerced
+                -- to 0 — is invalid; skip it so white balance is left untouched
+                -- rather than forced to an extreme.
+                if lrKey == "Temperature" and val < 1000 then
+                    Log.write("applyEdits: skipping invalid Temperature=" .. tostring(val))
+                else
+                    settings[lrKey] = val
+                    applied = applied + 1
+                    if val ~= 0 then
+                        logParts[#logParts + 1] = ourKey .. "=" .. tostring(val)
+                    end
                 end
             end
         end
@@ -259,15 +267,22 @@ local function computeEdits(photo, stylePrompt, strength)
     local thumbPath, writeErr = writeTempJpeg(jpegData)
     if not thumbPath then return false, "File error: " .. tostring(writeErr) end
 
-    local histStr = nil
+    -- Fetch the 400px thumbnail for two purposes:
+    --   1. Histogram analysis (always).
+    --   2. Image input for Ollama — the 1024px thumb base64-encodes to ~350KB
+    --      (~25 000 tokens) which overflows Ollama's context window. The 400px
+    --      version (~90KB, ~6 000 tokens) fits. smallPath is kept alive (not
+    --      deleted) until after analysePhoto returns so the Ollama adapter can
+    --      read it. Cloud providers (Anthropic/OpenAI) use thumbPath as before.
+    local histStr  = nil
     local preStats = nil
+    local smallPath = nil
     local smallData = getThumbnail(photo, 400, 400)
     if smallData then
-        local smallPath = writeTempJpeg(smallData)
+        smallPath = writeTempJpeg(smallData)
         if smallPath then
             local s, stats = Histogram.analyse(smallPath)
-            LrFileUtils.delete(smallPath)
-            histStr = s
+            histStr  = s
             preStats = stats
             if stats then
                 Log.write(string.format(
@@ -293,8 +308,10 @@ local function computeEdits(photo, stylePrompt, strength)
 
     Log.write("computeEdits: calling Claude (strength=" .. tostring(strength) ..
               ", style='" .. tostring(stylePrompt) .. "')")
-    local ok, editsOrErr = AIProvider.analysePhoto(thumbPath, stylePrompt, meta, histStr, strength)
+    -- Pass smallPath so Ollama can use the smaller image; cloud providers ignore it.
+    local ok, editsOrErr = AIProvider.analysePhoto(thumbPath, smallPath, stylePrompt, meta, histStr, strength)
     LrFileUtils.delete(thumbPath)
+    if smallPath then LrFileUtils.delete(smallPath) end
     if not ok then return false, tostring(editsOrErr) end
     -- Attach the pre-edit subject luminance for the analytical feedback pass.
     editsOrErr._preCenterLum = preStats and preStats.centerMeanLum or nil
@@ -632,7 +649,7 @@ LrFunctionContext.postAsyncTaskWithContext("AIEdit", function(context)
             visible = LrView.bind { key = "provider", transform = function(p) return p == "ollama" end },
         },
         f:static_text {
-            title = "Endpoint: http://localhost:11434/v1/chat/completions",
+            title = "Endpoint: http://localhost:11434/api/chat",
             font  = "<system/small>",
             visible = LrView.bind { key = "provider", transform = function(p) return p == "ollama" end },
         },
